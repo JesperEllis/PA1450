@@ -1,0 +1,99 @@
+import dash
+import dash_core_components as dcc
+import dash_html_components as html
+from dash.dependencies import Input, Output
+import plotly.express as pl 
+
+import pandas as pd
+
+rf = pd.read_csv('rain.csv',sep = ';')
+sf = pd.read_csv('C:/Users\Jesper\OneDrive\Documents\GitHub\WheaterDataManagment\haha\sun.csv',sep = ';', index_col='Datum')
+sf['Solskenstid'] = sf['Solskenstid']/(3600*24)
+tf = pd.read_csv('C:/Users\Jesper\Downloads\Temperatur.csv',sep = ';')
+allData = [rf,sf,tf]
+
+
+external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+
+def generate_table(dataframe, max_rows=10):
+    return html.Table([
+        html.Thead(
+            html.Tr([html.Th(col) for col in dataframe.columns])
+        ),
+        html.Tbody([
+            html.Tr([
+                html.Td(dataframe.iloc[i][col]) for col in dataframe.columns
+            ]) for i in range(min(len(dataframe), max_rows))
+        ])
+    ])
+
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+
+
+
+app.layout = html.Div([
+    dcc.Graph(
+        id='Wheater-graph'),
+
+    dcc.Checklist(
+    id = 'typeOfWheater',
+    options=[
+        {'label': 'Regn', 'value': 'R'},
+        {'label': 'Sol', 'value': 'S'},
+        {'label': 'Temperatur', 'value': 'T'}
+    ],
+    value=['R'],
+    labelStyle={'display': 'inline-block'}
+    ),
+    
+
+    html.I("Skriv in start- och slutdatum"),
+        html.Br(),
+        dcc.Input(id="input1", type="text", value=rf['Datum'].iloc[0]),
+        dcc.Input(id="input2", type="text", value=rf['Datum'].iloc[-1], debounce=True),
+        html.Button(id='submit-button', type='submit', children='Submit'),
+        html.Div(id="output"),
+
+    html.Div(children=[
+    html.H4(children='Solsken per dag i %'),
+    generate_table(sf.groupby(sf.index)['Solskenstid'].sum().reset_index())
+ 
+])
+])
+
+
+
+@app.callback(
+    dash.dependencies.Output('Wheater-graph', 'figure'),
+    [dash.dependencies.Input('typeOfWheater', 'value'),
+    dash.dependencies.Input('input1', 'value'),
+    dash.dependencies.Input('input2', 'value')]
+)
+def update_graphs(selector, startdate, enddate):
+    data = []
+    h = pd.read_csv('C:/Users\Jesper\OneDrive\Documents\GitHub\WheaterDataManagment\haha\sun.csv',sep = ';', index_col= 'Datum')
+    h['Solskenstid'] = h['Solskenstid']/(3600*24)
+    h = h.loc[startdate: enddate]
+    
+    totData = [
+        pd.read_csv('rain.csv',sep = ';', index_col='Datum').loc[startdate: enddate],
+        h.groupby(h.index)['Solskenstid'].sum().reset_index(),
+        pd.read_csv('C:/Users\Jesper\Downloads\Temperatur.csv',sep = ';', index_col = 'Datum').loc[startdate: enddate]
+        ]
+    if 'R' in selector:
+        data.append({'x': totData[0].index, 'y': totData[0].Nederbördsmängd,'mode' : 'markers', 'name': 'Nederbörd'})
+    if 'S' in selector:
+        data.append({'x': totData[1].Datum, 'y': totData[1].Solskenstid,'mode' : 'markers', 'name': 'Soltimmar'})
+    if 'T' in selector:
+        data.append({'x': totData[2].index, 'y': totData[2].Lufttemperatur,'mode' : 'markers', 'name': 'Temperatur'})
+    figure ={
+            'data' : data,
+            'layout': {'title': 'Väderdata'}
+        }
+    return figure
+
+                        
+if __name__ == '__main__':
+    app.run_server(debug=True)
+
+    #https://www.yr.no/place/Sweden/Blekinge/Karlskrona/forecast_hour_by_hour.xml
